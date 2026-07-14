@@ -1,0 +1,27 @@
+[package]
+name = "kalid"
+version = "0.0.1"
+license = "MIT OR Apache-2.0"
+authors = ["Aris Ripandi <aris@duck.com>"]
+description = "Calendar-based, K-sortable unique ID generator with UUID v7 interoperability"
+keywords = ["identifier", "sortable", "k-sortable", "uuid"]
+homepage = "https://github.com/riipandi/kalid"
+repository = "https://github.com/riipandi/kalid"
+rust-version = "1.97.0"
+edition = "2024"
+publish = true
+
+[dependencies]
+chrono = "0.4.45"
+rand = "0.10.2"
+thiserror = "2.0.18"
+uuid = { version = "1.23.5", default-features = false, features = ["std", "v7"] }
+
+[dev-dependencies]
+ulid = { version = "2.0.1", default-features = false, features = ["std"] }
+nanoid = { version = "0.5.0", default-features = false }
+criterion = { version = "0.8.2", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
