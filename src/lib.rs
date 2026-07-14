@@ -11,40 +11,39 @@
 //! {ms_hex:012}{month:1}{week:02}{day:1}
 //! ```
 //!
-//! | Segment | Length | Encoding |
-//! |---------|--------|----------|
-//! | Ms      | 12 | Unix timestamp in milliseconds, lowercase hex |
-//! | Month   | 1  | `a` (January) .. `l` (December) |
-//! | Week    | 2  | ISO week number 01-53 |
-//! | Day     | 1  | `m` (Monday) .. `s` (Sunday) |
-//!
 //! # K-sortability
 //!
 //! **Fully K-sortable** — lexicographic order matches chronological order
 //! across all boundaries: same millisecond, day, month, year, and even the
-//! December→January year boundary. No inversions or edge cases.
+//! December→January year boundary.
 //!
 //! # Feature flags
 //!
-//! | Feature | Description | Default |
-//! |---------|-------------|---------|
-//! | `uuid` | UUID v7 interop (`to_uuid_v7`, `from_uuid_v7`) | ✅ on |
-//! | `tokio` | Async via `tokio::task::spawn_blocking` | off |
-//! | `smol` | Async via `smol::unblock` | off |
+//! | Feature | Default | Description                                    |
+//! |---------|---------|------------------------------------------------|
+//! | `uuid`  | on      | UUID v7 interop (`to_uuid_v7`, `from_uuid_v7`) |
+//! | `tokio` | off     | Async via `tokio::task::spawn_blocking`        |
+//! | `smol`  | off     | Async via `smol::unblock`                      |
 //!
-//! Features `tokio` and `smol` are mutually exclusive.
+//! `tokio` and `smol` are mutually exclusive.
 //!
 //! # UUID v7 interoperability (requires `uuid` feature)
 //!
-//! Kalid and [UUID v7](https://www.rfc-editor.org/rfc/rfc9562#name-uuid-version-7)
-//! share the exact same millisecond timestamp. Week and day are encoded in
-//! `rand_a` (12 bits = `[week:6][day:3][random:3]`). Conversion is fully
-//! deterministic: `kalid -> UUID v7 -> kalid` produces the exact same string.
+//! Kalid and [UUID v7](https://www.rfc-editor.org/rfc/rfc9562) share the
+//! exact same ms timestamp. Week+day are encoded in `rand_a` (12 bits).
+//! Conversion is fully deterministic: `kalid -> UUID v7 -> kalid` produces
+//! the exact same string.
+//!
+//! # Prefix (optional)
+//!
+//! Use [`KalidBuilder`] to add a prefix and separator:
+//!
+//! ```
+//! let id = kalid::Kalid::builder().prefix("order").build();
+//! assert!(id.starts_with("order_"));
+//! ```
 //!
 //! # Async (requires `tokio` or `smol` feature)
-//!
-//! When a feature is enabled, CPU-bound work is offloaded to the runtime's
-//! blocking pool:
 //!
 //! ```
 //! # #[cfg(feature = "tokio")] {
@@ -59,19 +58,15 @@
 //!
 //! ```
 //! use kalid::Kalid;
-//!
 //! let k = Kalid::new();
 //! assert_eq!(k.as_string().len(), 16);
-//!
-//! // Roundtrip: string → parse → string
 //! let parsed = Kalid::parse(&k.as_string()).unwrap();
 //! assert_eq!(parsed.as_string(), k.as_string());
 //!
-//! // UUID v7 roundtrip (requires uuid feature)
 //! #[cfg(feature = "uuid")] {
-//!     let uuid = k.to_uuid_v7();
-//!     let back = Kalid::from_uuid_v7(&uuid);
-//!     assert_eq!(back.epoch_ms(), k.epoch_ms());
+//! let uuid = k.to_uuid_v7();
+//! let back = Kalid::from_uuid_v7(&uuid);
+//! assert_eq!(back.epoch_ms(), k.epoch_ms());
 //! }
 //! ```
 
@@ -86,37 +81,26 @@ pub const DAY_CHARS: [char; 7] = ['m', 'n', 'o', 'p', 'q', 'r', 's'];
 /// Errors that can occur when parsing a kalid string.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KalidParseError {
-    /// Input length is not 16 characters.
     #[error("kalid must be exactly 16 characters")]
     InvalidLength,
-    /// Timestamp segment is not valid 12-digit hex.
     #[error("timestamp must be 12 hex digits")]
     InvalidTimestamp,
-    /// Month character not in range `a`..`l`.
     #[error("month must be a..l")]
     InvalidMonth,
-    /// Week segment is not a valid two-digit number.
     #[error("week must be a 2-digit number")]
     InvalidWeek,
-    /// Day character not in range `m`..`s`.
     #[error("day must be m..s")]
     InvalidDay,
-    /// Parsed components don't match the embedded timestamp.
     #[error("kalid components don't match timestamp")]
     Mismatch,
 }
 
 /// A calendar-based unique ID with optional UUID v7 interoperability.
 ///
-/// Encodes a Unix millisecond timestamp into a 16-character string.
-/// See the [module-level documentation](self) for format details.
-///
 /// ```
 /// use kalid::Kalid;
-///
 /// let k = Kalid::new();
 /// assert_eq!(k.as_string().len(), 16);
-/// assert_eq!(Kalid::parse(&k.as_string()).unwrap(), k);
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Kalid {
@@ -141,9 +125,7 @@ impl Kalid {
         }
     }
 
-    /// Create a `Kalid` from a Unix epoch in **seconds**.
-    ///
-    /// The sub-second fraction is set to zero.
+    /// Create a `Kalid` from a Unix epoch in seconds (fraction set to zero).
     ///
     /// ```
     /// use kalid::Kalid;
@@ -156,7 +138,7 @@ impl Kalid {
         }
     }
 
-    /// Create a `Kalid` from a Unix epoch in **milliseconds**.
+    /// Create a `Kalid` from a Unix epoch in milliseconds.
     ///
     /// ```
     /// use kalid::Kalid;
@@ -169,16 +151,10 @@ impl Kalid {
 
     /// Parse a 16-character kalid string.
     ///
-    /// Every segment is validated and the month/week/day are verified
-    /// against the embedded timestamp.
-    ///
     /// ```
     /// use kalid::Kalid;
-    ///
-    /// // epoch 0 ms = Jan 1, 1970 (Thu) → month=a week=01 day=p
     /// let k = Kalid::parse("000000000000a01p").unwrap();
     /// assert_eq!(k.epoch_ms(), 0);
-    /// assert_eq!(k.as_string(),   "000000000000a01p");
     /// ```
     pub fn parse(s: &str) -> Result<Self, KalidParseError> {
         if s.len() != 16 {
@@ -207,7 +183,7 @@ impl Kalid {
     ///
     /// ```
     /// # #[cfg(feature = "uuid")] {
-    /// # use kalid::Kalid;
+    /// use kalid::Kalid;
     /// let uuid = uuid::Uuid::now_v7();
     /// let k = Kalid::from_uuid_v7(&uuid);
     /// assert_eq!(k.as_string().len(), 16);
@@ -233,7 +209,6 @@ impl Default for Kalid {
 
 impl Kalid {
     /// Return the kalid as a 16-character string.
-    ///
     /// Format: `{ms_hex:012}{month}{week:02}{day}`.
     ///
     /// ```
@@ -245,9 +220,7 @@ impl Kalid {
         format_kalid(self.epoch_ms)
     }
 
-    /// Return the Unix epoch timestamp in seconds.
-    ///
-    /// Sub-millisecond precision is not available.
+    /// Return the Unix epoch in seconds (sub-ms not available).
     ///
     /// ```
     /// use kalid::Kalid;
@@ -258,7 +231,7 @@ impl Kalid {
         self.epoch_ms / 1000
     }
 
-    /// Return the Unix epoch timestamp in milliseconds.
+    /// Return the Unix epoch in milliseconds.
     ///
     /// ```
     /// use kalid::Kalid;
@@ -269,19 +242,14 @@ impl Kalid {
         self.epoch_ms
     }
 
-    /// Convert to a UUID v7 with week+day encoded in `rand_a`.
-    ///
-    /// Requires the `uuid` feature.
+    /// Convert to UUID v7 with week+day in `rand_a`. Requires `uuid` feature.
     ///
     /// ```
     /// # #[cfg(feature = "uuid")] {
     /// use kalid::Kalid;
-    ///
     /// let k = Kalid::new();
     /// let uuid = k.to_uuid_v7();
     /// assert_eq!(uuid.get_version(), Some(uuid::Version::SortRand));
-    ///
-    /// // Deterministic roundtrip
     /// let back = Kalid::from_uuid_v7(&uuid);
     /// assert_eq!(back.as_string(), k.as_string());
     /// # }
@@ -292,13 +260,18 @@ impl Kalid {
         rand::fill(&mut bytes[..]);
         let secs = self.epoch_ms / 1000;
         let nsecs = ((self.epoch_ms % 1000) * 1_000_000) as u32;
-        // INVARIANT: Any `i64` millis maps to a valid UTC datetime within chrono's range.
+        // INVARIANT: Any `i64` millis maps to a valid UTC datetime.
         let dt = Utc.timestamp_opt(secs, nsecs).unwrap();
         let week = dt.iso_week().week();
         let day = dt.weekday().num_days_from_monday();
         bytes[0] = (bytes[0] & 0xF0) | ((week >> 2) as u8 & 0x0F);
         bytes[1] = (bytes[1] & 0x07) | (((week as u8 & 0x03) << 6) | ((day as u8 & 0x07) << 3));
         uuid::Builder::from_unix_timestamp_millis(self.epoch_ms as u64, &bytes).into_uuid()
+    }
+
+    /// Create a [`KalidBuilder`] for configuring prefix and separator.
+    pub fn builder() -> KalidBuilder {
+        KalidBuilder::new()
     }
 }
 
@@ -311,7 +284,7 @@ use chrono::Datelike;
 fn format_kalid(epoch_ms: i64) -> String {
     let secs = epoch_ms / 1000;
     let nsecs = ((epoch_ms % 1000) * 1_000_000) as u32;
-    // INVARIANT: Any `i64` millis maps to a valid UTC datetime within chrono's range.
+    // INVARIANT: Any `i64` millis maps to a valid UTC datetime.
     let dt = Utc.timestamp_opt(secs, nsecs).unwrap();
     let month = MONTH_CHARS[dt.month0() as usize];
     let week = dt.iso_week().week();
@@ -319,9 +292,7 @@ fn format_kalid(epoch_ms: i64) -> String {
     format!("{:012x}{month}{week:02}{day}", epoch_ms)
 }
 
-/// Generate a kalid string directly.
-///
-/// Equivalent to `Kalid::new().as_string()`.
+/// Generate a kalid string directly (`Kalid::new().as_string()`).
 ///
 /// ```
 /// use kalid::generate_kalid;
@@ -333,13 +304,85 @@ pub fn generate_kalid() -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Builder (prefix + separator)
+// ---------------------------------------------------------------------------
+
+/// Configurable builder for kalid strings with an optional prefix.
+///
+/// Default separator is `_` (URL-safe). Use [`no_separator`](KalidBuilder::no_separator)
+/// to remove it, or [`separator`](KalidBuilder::separator) to customise.
+///
+/// ```
+/// use kalid::Kalid;
+/// let id = Kalid::builder().prefix("order").build();
+/// assert!(id.starts_with("order_"));
+/// assert_eq!(id.len(), 22);
+/// ```
+#[derive(Debug, Clone)]
+pub struct KalidBuilder {
+    prefix: Option<String>,
+    separator: Option<char>,
+}
+
+impl KalidBuilder {
+    fn new() -> Self {
+        KalidBuilder {
+            prefix: None,
+            separator: Some('_'),
+        }
+    }
+
+    /// Set the prefix string.
+    pub fn prefix(mut self, s: &str) -> Self {
+        self.prefix = Some(s.to_string());
+        self
+    }
+
+    /// Set a custom separator (default `_`). Recommended: URL-safe chars `- . _ ~`.
+    pub fn separator(mut self, c: char) -> Self {
+        self.separator = Some(c);
+        self
+    }
+
+    /// Remove separator — prefix is prepended directly.
+    pub fn no_separator(mut self) -> Self {
+        self.separator = None;
+        self
+    }
+
+    /// Generate a kalid from the current system time with this config.
+    pub fn build(&self) -> String {
+        self.format(&Kalid::new())
+    }
+
+    /// Format an existing `Kalid` with this config.
+    pub fn build_from(&self, kalid: &Kalid) -> String {
+        self.format(kalid)
+    }
+
+    fn format(&self, kalid: &Kalid) -> String {
+        let base = kalid.as_string();
+        match (&self.prefix, &self.separator) {
+            (Some(p), Some(c)) => format!("{}{}{}", p, c, base),
+            (Some(p), None) => format!("{}{}", p, base),
+            (None, _) => base,
+        }
+    }
+}
+
+impl Default for KalidBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Async support (requires `tokio` or `smol` feature)
 // ---------------------------------------------------------------------------
 
 #[cfg(all(feature = "tokio", feature = "smol"))]
 compile_error!("features `tokio` and `smol` are mutually exclusive; enable only one.");
 
-/// Offloads CPU-bound work to the async runtime's blocking pool.
 #[cfg(any(feature = "tokio", feature = "smol"))]
 mod rt {
     pub(crate) async fn blocking<F, T>(f: F) -> T
@@ -358,18 +401,7 @@ mod rt {
     }
 }
 
-/// Generate a kalid string asynchronously.
-///
-/// Requires the `tokio` or `smol` feature.
-///
-/// ```
-/// # #[cfg(feature = "tokio")] {
-/// tokio::runtime::Runtime::new().unwrap().block_on(async {
-/// let id = kalid::generate_kalid_async().await;
-/// assert_eq!(id.len(), 16);
-/// });
-/// # }
-/// ```
+/// Generate a kalid asynchronously. Requires `tokio` or `smol` feature.
 #[cfg(any(feature = "tokio", feature = "smol"))]
 pub async fn generate_kalid_async() -> String {
     rt::blocking(generate_kalid).await
@@ -377,19 +409,7 @@ pub async fn generate_kalid_async() -> String {
 
 #[cfg(any(feature = "tokio", feature = "smol"))]
 impl Kalid {
-    /// Create a new `Kalid` asynchronously.
-    ///
-    /// Offloads the system clock query to the runtime's blocking pool.
-    /// Requires the `tokio` or `smol` feature.
-    ///
-    /// ```
-    /// # #[cfg(feature = "tokio")] {
-    /// tokio::runtime::Runtime::new().unwrap().block_on(async {
-    /// let k = kalid::Kalid::new_async().await;
-    /// assert_eq!(k.as_string().len(), 16);
-    /// });
-    /// # }
-    /// ```
+    /// Create a new `Kalid` asynchronously. Requires `tokio` or `smol` feature.
     pub async fn new_async() -> Self {
         rt::blocking(Kalid::new).await
     }

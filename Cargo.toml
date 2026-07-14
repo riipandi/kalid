@@ -1,6 +1,6 @@
 [package]
 name = "kalid"
-version = "0.0.3"
+version = "0.0.4"
 license = "MIT OR Apache-2.0"
 authors = ["Aris Ripandi <aris@duck.com>"]
 description = "Calendar-based, K-sortable unique ID generator with UUID v7 interoperability"
