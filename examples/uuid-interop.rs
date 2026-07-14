@@ -1,12 +1,25 @@
-//! Lossless Kalid ↔ UUID v7 interop.
+//! Lossless Kalid ↔ UUID v7 interop (requires uuid feature).
 //!
 //! ```bash
 //! cargo run --example uuid-interop
 //! ```
 
-use chrono::{Datelike, TimeZone};
-
 fn main() {
+    #[cfg(not(feature = "uuid"))]
+    {
+        eprintln!("This example requires the `uuid` feature (enabled by default).");
+        eprintln!("  cargo run --example uuid-interop --features uuid");
+        std::process::exit(1);
+    }
+
+    #[cfg(feature = "uuid")]
+    run();
+}
+
+#[cfg(feature = "uuid")]
+fn run() {
+    use chrono::{Datelike, TimeZone};
+
     let k = kalid::Kalid::from_epoch_ms(1_784_060_036_000);
     let uuid = k.to_uuid_v7();
     let back = kalid::Kalid::from_uuid_v7(&uuid);

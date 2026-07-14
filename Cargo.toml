@@ -4,7 +4,7 @@ version = "0.0.3"
 license = "MIT OR Apache-2.0"
 authors = ["Aris Ripandi <aris@duck.com>"]
 description = "Calendar-based, K-sortable unique ID generator with UUID v7 interoperability"
-keywords = ["identifier", "sortable", "k-sortable", "uuid"]
+keywords = ["identifier", "sortable", "k-sortable", "uuid", "async"]
 homepage = "https://github.com/riipandi/kalid"
 repository = "https://github.com/riipandi/kalid"
 rust-version = "1.90.0"
@@ -14,11 +14,15 @@ publish = true
 [dependencies]
 chrono = "0.4.45"
 rand = "0.10.2"
+smol = { version = "2", optional = true }
 thiserror = "2.0.18"
+tokio = { version = "1", optional = true, default-features = false, features = ["rt", "rt-multi-thread"] }
 uuid = { version = "1.23.5", default-features = false, features = ["std", "v7"], optional = true }
 
 [features]
 default = ["uuid"]
+smol = ["dep:smol"]
+tokio = ["dep:tokio"]
 uuid = ["dep:uuid"]
 
 [dev-dependencies]
