@@ -1,17 +1,17 @@
-use kalid::Kalid;
+use kalid::{Kalid, KalidBuilder};
 
 #[test]
 fn builder_default() {
     let id = Kalid::builder().build();
     assert!(!id.contains('_'));
-    assert_eq!(id.len(), 16); // no prefix = just kalid
+    assert_eq!(id.len(), 16);
 }
 
 #[test]
 fn builder_with_prefix() {
     let id = Kalid::builder().prefix("order").build();
     assert!(id.starts_with("order_"));
-    assert_eq!(id.len(), 22); // "order_" + 16
+    assert_eq!(id.len(), 22);
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn builder_no_separator() {
 #[test]
 fn builder_empty_prefix() {
     let id = Kalid::builder().prefix("").build();
-    assert_eq!(id.len(), 17); // "" + "_" + 16
+    assert_eq!(id.len(), 17);
     assert!(id.starts_with('_'));
 }
 
@@ -45,7 +45,6 @@ fn builder_build_from() {
 
 #[test]
 fn builder_no_prefix_with_separator_setting() {
-    // Setting separator without prefix has no effect
     let id = Kalid::builder().separator('|').build();
     assert!(!id.contains('|'));
     assert_eq!(id.len(), 16);
@@ -59,7 +58,25 @@ fn builder_chain_all() {
         .no_separator()
         .prefix("dbg")
         .build();
-    // Last prefix wins, no_separator removes separator
     assert!(id.starts_with("dbg"));
     assert!(!id.contains('.'));
+}
+
+#[test]
+fn builder_default_trait() {
+    let b: KalidBuilder = Default::default();
+    let id = b.build();
+    assert_eq!(id.len(), 16);
+}
+
+#[test]
+fn builder_debug_format() {
+    let b = Kalid::builder()
+        .prefix("x")
+        .separator('-')
+        .no_separator()
+        .prefix("test");
+    let fmt = format!("{:?}", b);
+    assert!(fmt.contains("prefix"));
+    assert!(fmt.contains("separator"));
 }
