@@ -1,7 +1,8 @@
 # Kalid
 
-Calendar-based, K-sortable unique ID generator with UUID v7 interoperability.
-Kalid encodes a Unix millisecond timestamp into a compact 16-character string.
+Calendar-based, K-sortable unique ID generator.
+
+Kalid encodes a Unix millisecond timestamp into a compact 16-character string:
 
 ```text
 {ms_hex:012}{month:1}{week:02}{day:1}
@@ -14,27 +15,40 @@ Kalid encodes a Unix millisecond timestamp into a compact 16-character string.
 | Week    | 2      | ISO week number 01-53                         |
 | Day     | 1      | `m` (Monday) .. `s` (Sunday)                  |
 
-## Goals
+## When to use
 
-- **K-sortable** — lexicographic order = chronological order across all boundaries (same ms, day, month, year, and December→January).
-- **Human-readable** — encoded month/week/day at a glance.
-- **UUID v7 lossless interop** — deterministic roundtrip `kalid → UUID v7 → kalid` produces the exact same string. Week+day are embedded in `rand_a` (12 bits).
-- **Fast** — see [benchmarks](#benchmarks).
+- You need **human-readable**, sortable IDs for logs, debug output, or CLI tools
+- You want to see month/week/day encoded directly in the ID
+- You need **K-sortability** — lexicographic order = chronological order, across all time boundaries including year rollover
+- You need seamless **UUID v7** interop (optional `uuid` feature)
+- You want a **fast**, minimal-dependency ID generator with zero `unsafe` code
 
-## Non-goals
+## When not to use
 
-- **Global uniqueness** — not designed for distributed ID generation without coordination. Unlike UUID v7 `/ ULID`, Kalid has no dedicated random component for uniqueness (only 3 bits of randomness). Collisions within the same millisecond are expected.
-- **Cryptographic randomness** — Kalid is not cryptographically secure. The random bits are generated with a CSPRNG (`rand::fill`) but the ID is short and predictable from the timestamp.
-- **Sorting by month/week/day** — the month, week, and day suffix is for human readability only. Sort order is driven entirely by the millisecond hex prefix.
-- **Variable-length / database-optimized** — Kalid is always 16 characters. No compact/binary encoding is provided.
+- **Global uniqueness** — unlike UUID v7 or ULID, Kalid has no dedicated random component. Only 3 bits of `rand_a` are random. Collisions within the same millisecond are expected at high throughput.
+- **Cryptographic security** — Kalid is not cryptographically secure. Do not use for session tokens, secrets, or anything requiring unpredictability.
+- **Binary/compact encoding** — Kalid is always 16-character ASCII. No configurable length, no binary format. For space-constrained systems, consider ULID (128-bit UUID-compatible).
+- **Timestamp ordering before 1970 or after ~292M years** — Kalid uses `i64` epoch milliseconds. The encoding scheme works, but chrono's range limits apply for date-component extraction.
+- **Cross-millisecond sort stability** — IDs generated within the same millisecond share the same timestamp prefix. Month/week/day is identical. Sort stability depends on the hex suffix (random bits), but there are only 3 random bits — expect ties.
 
 ## Quick Start
 
-Add to `Cargo.toml`:
+```toml
+[dependencies]
+kalid = "0.0.2"
+```
+
+To also enable **UUID v7 interop**, ensure the `uuid` feature is enabled (it's on by default):
 
 ```toml
 [dependencies]
-kalid = "0.0.1"
+kalid = { version = "0.0.2", features = ["uuid"] }
+```
+
+Opt out if you don't need UUID v7:
+
+```toml
+kalid = { version = "0.0.2", default-features = false }
 ```
 
 ```rust
@@ -52,13 +66,13 @@ println!("{}", k.as_string()); // e.g. "019f6243c3a0g29n"
 let parsed = Kalid::parse("000000000000a01p").unwrap();
 assert_eq!(parsed.epoch_ms(), 0);
 
-// UUID v7 roundtrip (lossless)
+// UUID v7 roundtrip (requires uuid feature)
 let uuid = k.to_uuid_v7();
 let back = Kalid::from_uuid_v7(&uuid);
 assert_eq!(back.as_string(), k.as_string());
 ```
 
-Run the examples:
+Run examples:
 
 ```bash
 cargo run --example basic
@@ -69,21 +83,19 @@ cargo run --example sorting
 
 ## Benchmarks
 
-Results measured on Apple M4 (10 cores, 2024), macOS, Rust 1.97.0, criterion.rs (100 samples each).
+Results measured on **macOS, Apple M2 Pro**, Rust 1.97.0, criterion.rs (100 samples each).
 
-| Operation                         | Time                         |
-|-----------------------------------|------------------------------|
-| `kalid::from_epoch_ms`            | **~0.33 ns**                 |
-| `kalid::from_uuid_v7`             | **~0.65 ns**                 |
-| `kalid::to_uuid_v7`               | **~29.4 ns**                 |
-| `ulid::Ulid::r#gen().to_string()` | **~56.5 ns** (≈1.9× slower)  |
-| `kalid::as_string`                | **~104.6 ns**                |
-| `kalid::parse`                    | **~120.9 ns**                |
-| `kalid::generate_kalid`           | **~159.5 ns**                |
-| `uuid::Uuid::now_v7`              | **~874.7 ns** (≈5.5× slower) |
-| `nanoid::nanoid!(16)`             | **~1.15 µs** (≈7.2× slower)  |
-
-Run benchmarks yourself:
+| Operation                         | Time         | vs `generate_kalid` |
+|-----------------------------------|--------------|---------------------|
+| `kalid::from_epoch_ms`            | 0.33 ns      | **483× faster**     |
+| `kalid::from_uuid_v7`             | 0.57 ns      | **279× faster**     |
+| `kalid::to_uuid_v7`               | 28.8 ns      | **5.6× faster**     |
+| `ulid::Ulid::r#gen().to_string()` | 62.6 ns      | **2.6× faster**     |
+| `kalid::as_string`                | 104.6 ns     | 1.5× faster         |
+| `kalid::parse`                    | 120.9 ns     | 1.3× faster         |
+| **`kalid::generate_kalid`**       | **159.9 ns** | **1.0× (baseline)** |
+| `uuid::Uuid::now_v7`              | 871.8 ns     | 5.5× slower         |
+| `nanoid::nanoid!(16)`             | 1,147.6 ns   | 7.2× slower         |
 
 ```bash
 make bench
@@ -91,19 +103,31 @@ make bench
 
 ## UUID v7 Interoperability
 
-Kalid and [UUID v7](https://www.rfc-editor.org/rfc/rfc9562) (RFC 9562) share the exact same millisecond timestamp. Week and day are encoded in `rand_a`:
+Requires the `uuid` feature (enabled by default). Kalid and [UUID v7](https://www.rfc-editor.org/rfc/rfc9562) share the exact same millisecond timestamp. Week and day are encoded in `rand_a`:
 
 ```text
 rand_a (12 bit) = [week:6][day:3][random:3]
 ```
 
-**Kalid → UUID v7**: timestamp hex → bytes 0-5 (48 bits), week+day → `rand_a` (9 bits).
-Only 62 bits (`rand_b`) remain random for UUID uniqueness.
+**Kalid → UUID v7**: timestamp hex → bytes 0-5 (48 bits), week+day → `rand_a` (9 bits). Only `rand_b` (62 bits) remains random for UUID uniqueness.
 
-**UUID v7 → Kalid**: extracts ms timestamp + week/day from `rand_a`.
-Roundtrip produces the exact same string.
+**UUID v7 → Kalid**: extracts ms timestamp + week/day from `rand_a`. Roundtrip is deterministic — produces the exact same string.
 
-Externally-generated UUID v7s (e.g. `Uuid::now_v7()`) decode to a valid Kalid — timestamp is accurate, but week+day are derived from the timestamp (not from `rand_a`).
+Externally-generated UUID v7s decode to a valid Kalid — timestamp is accurate, but week+day are derived from the timestamp (not from `rand_a`).
+
+## Feature flags
+
+| Feature | Description                                                                 | Default |
+|---------|-----------------------------------------------------------------------------|---------|
+| `uuid`  | Enables `to_uuid_v7()` / `from_uuid_v7()` methods + `uuid` crate dependency | ✅ on    |
+
+## Limitations
+
+- **No global uniqueness guarantee** — Kalid only has 3 random bits. At high throughput, same-millisecond collisions are expected. Use UUID v7 or ULID for distributed uniqueness.
+- **Not cryptographically secure** — the output is predictable from the timestamp. Do not use for secrets, tokens, or anti-forgery.
+- **No variable-length encoding** — always exactly 16 ASCII characters. No binary/compact representation is provided.
+- **3-bit randomness** — only `rand_a[2:0]` is random. For any given millisecond, at most 8 unique Kalids can be generated.
+- **Chrono range dependency** — date component extraction (month/week/day) depends on `chrono::Utc`, which covers a wide but finite range.
 
 ## Contributing
 
@@ -128,7 +152,9 @@ See the [LICENSE-APACHE](./LICENSE-APACHE) and [LICENSE-MIT](./LICENSE-MIT) file
 
 ---
 
-<sub>Created by [Aris Ripandi](https://github.com/riipandi).</sub>
+<sub>🤫 Psst! If you like my work you can support me via [GitHub sponsors](https://github.com/sponsors/riipandi).</sub>
+
+[![CreatorBadge](https://badgen.net/badge/icon/Aris%20Ripandi?label=Made+by&color=black&labelColor=black)](https://x.com/intent/follow?screen_name=riipandi)
 
 <!-- References -->
 

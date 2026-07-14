@@ -1,3 +1,5 @@
+#![cfg(feature = "uuid")]
+
 use chrono::TimeZone;
 use kalid::Kalid;
 
@@ -44,7 +46,6 @@ fn from_uuid_v7_preserves_string_format() {
 
 #[test]
 fn uuid_v7_byte_level_interop() {
-    // The hex timestamp MUST match bytes [0..6] of the UUID v7
     let kalid = Kalid::from_epoch_ms(0x019f62686310);
     let uuid = kalid.to_uuid_v7();
     assert_eq!(uuid.as_bytes()[0], 0x01);
@@ -117,8 +118,6 @@ fn rand_a_low_3_bits_are_random() {
     let kalid = Kalid::from_epoch_ms(1_784_060_036_000);
     let uuid1 = kalid.to_uuid_v7();
     let uuid2 = kalid.to_uuid_v7();
-    // Low 3 bits are random — they MAY differ (prob ~ 1 - (1/8) per pair)
-    // We check that week+day bits are identical
     let wd1 = (u16::from_be_bytes([uuid1.as_bytes()[6], uuid1.as_bytes()[7]]) & 0x0FF8) >> 3;
     let wd2 = (u16::from_be_bytes([uuid2.as_bytes()[6], uuid2.as_bytes()[7]]) & 0x0FF8) >> 3;
     assert_eq!(wd1, wd2, "week+day in rand_a should be identical across calls");

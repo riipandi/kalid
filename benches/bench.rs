@@ -1,3 +1,5 @@
+#![cfg(feature = "uuid")]
+
 use criterion::{Criterion, criterion_group, criterion_main};
 
 fn bench_kalid_generate(c: &mut Criterion) {
@@ -32,7 +34,7 @@ fn bench_kalid_from_uuid_v7(c: &mut Criterion) {
     });
 }
 
-// -- Competitor comparisons (10k iters each) -------------------------
+// -- Competitor comparisons -----------------------------------------
 
 fn bench_nanoid_generate(c: &mut Criterion) {
     c.bench_function("nanoid::nanoid!(16)", |b| b.iter(|| nanoid::nanoid!(16)));
@@ -62,5 +64,4 @@ criterion_group!(
         bench_uuid_now_v7,
         bench_ulid_generate,
 );
-
 criterion_main!(kalid);

@@ -1,3 +1,6 @@
+// Copyright (c) Aris Ripandi <aris@duck.com>
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Kalid: calendar-based, K-sortable unique ID generator with UUID v7
 //! interoperability.
 //!
@@ -5,7 +8,7 @@
 //! string:
 //!
 //! ```text
-//! {ms_hex}{month}{week}{day}
+//! {ms_hex:012}{month:1}{week:02}{day:1}
 //! ```
 //!
 //! | Segment | Length | Encoding |
@@ -25,29 +28,26 @@
 //! with time. Month/week/day suffixes are metadata for human readability and
 //! do not affect sort order.
 //!
-//! # UUID v7 interoperability (lossless, deterministic)
+//! # UUID v7 interoperability (requires `uuid` feature)
 //!
-//! Kalid and [UUID v7](https://www.rfc-editor.org/rfc/rfc9562#name-uuid-version-7)
-//! (RFC 9562) share the exact same millisecond timestamp. The week and day
-//! are encoded in the UUID v7 `rand_a` field (12 bits):
+//! When the `uuid` feature is enabled, Kalid and
+//! [UUID v7](https://www.rfc-editor.org/rfc/rfc9562#name-uuid-version-7)
+//! (RFC 9562) share the exact same millisecond timestamp. Week and day are
+//! encoded in the UUID v7 `rand_a` field (12 bits):
 //!
 //! ```text
 //! rand_a (12 bit) = [week:6][day:3][random:3]
 //! ```
 //!
-//! This makes the conversion **fully deterministic** in both directions:
+//! Conversion is fully deterministic in both directions:
+//! `kalid -> UUID v7 -> kalid` produces the exact same string.
 //!
-//! * **Kalid -> UUID v7** - the hex timestamp maps to bytes 0-5 (48 bits),
-//!   week+day encode into `rand_a` (9 bits). Only `rand_b` (62 bits) remains
-//!   random for UUID uniqueness.
-//! * **UUID v7 -> Kalid** - extracts the millisecond timestamp from bytes
-//!   0-5 and week+day from `rand_a`. The roundtrip
-//!   `kalid -> UUID v7 -> kalid` always produces the **exact same string**.
+//! Enable with:
+//! ```toml
+//! [dependencies]
+//! kalid = { version = "0.0.2", features = ["uuid"] }
+//! ```
 //!
-//! UUIDs created externally (e.g. `Uuid::now_v7()`) still decode to a valid
-//! kalid - the timestamp is accurate, but week+day in the output will be
-//! derived from the timestamp (not from `rand_a`) since external UUIDs
-//! cannot carry kalid-encoded week+day.
 //! # Example
 //!
 //! ```
@@ -59,22 +59,24 @@
 //! let parsed = Kalid::parse(&kalid.as_string()).unwrap();
 //! assert_eq!(parsed.as_string(), kalid.as_string());
 //!
-//! // UUID v7 roundtrip (lossless)
-//! let uuid = kalid.to_uuid_v7();
-//! let back = Kalid::from_uuid_v7(&uuid);
-//! assert_eq!(back.epoch_ms(), kalid.epoch_ms());
+//! // UUID v7 roundtrip (lossless, requires uuid feature)
+//! #[cfg(feature = "uuid")]
+//! {
+//!     let uuid = kalid.to_uuid_v7();
+//!     let back = Kalid::from_uuid_v7(&uuid);
+//!     assert_eq!(back.epoch_ms(), kalid.epoch_ms());
+//! }
 //! ```
 
-// Copyright (c) Aris Ripandi <aris@duck.com>
-// SPDX-License-Identifier: MIT OR Apache-2.0
+use chrono::{TimeZone, Utc};
 
-use chrono::{Datelike, TimeZone, Utc};
 /// Month encoding: `a` = January .. `l` = December.
 pub const MONTH_CHARS: [char; 12] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
 
 /// Day-of-week encoding: `m` = Monday .. `s` = Sunday.
 pub const DAY_CHARS: [char; 7] = ['m', 'n', 'o', 'p', 'q', 'r', 's'];
 
+/// Errors that can occur when parsing a kalid string.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum KalidParseError {
     /// Input length is not 16 characters.
@@ -97,10 +99,23 @@ pub enum KalidParseError {
     Mismatch,
 }
 
-/// A calendar-based unique ID with UUID v7 interoperability.
+/// A calendar-based unique ID with optional UUID v7 interoperability.
 ///
-/// See the [module-level documentation](self) for format, K-sortability,
-/// and UUID v7 interop details.
+/// Kalid encodes a Unix millisecond timestamp into a compact 16-character
+/// string that is human-readable and fully K-sortable.
+///
+/// See the [module-level documentation](self) for format details, K-sortability
+/// guarantees, and UUID v7 interop.
+///
+/// # Basic usage
+///
+/// ```
+/// use kalid::Kalid;
+///
+/// let k = Kalid::new();
+/// assert_eq!(k.as_string().len(), 16);
+/// assert_eq!(Kalid::parse(&k.as_string()).unwrap(), k);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Kalid {
     epoch_ms: i64,
@@ -114,7 +129,7 @@ impl Kalid {
     /// Create a new `Kalid` from the current system time.
     ///
     /// ```
-    /// # use kalid::Kalid;
+    /// use kalid::Kalid;
     /// let kalid = Kalid::new();
     /// assert_eq!(kalid.as_string().len(), 16);
     /// ```
@@ -129,7 +144,7 @@ impl Kalid {
     /// The sub-second fraction is set to zero.
     ///
     /// ```
-    /// # use kalid::Kalid;
+    /// use kalid::Kalid;
     /// let kalid = Kalid::from_epoch(1_784_060_036);
     /// assert_eq!(kalid.epoch_secs(), 1_784_060_036);
     /// ```
@@ -142,7 +157,7 @@ impl Kalid {
     /// Create a `Kalid` from a Unix epoch in **milliseconds**.
     ///
     /// ```
-    /// # use kalid::Kalid;
+    /// use kalid::Kalid;
     /// let kalid = Kalid::from_epoch_ms(1_784_060_036_000);
     /// assert_eq!(kalid.epoch_ms(), 1_784_060_036_000);
     /// ```
@@ -156,7 +171,7 @@ impl Kalid {
     /// and the month/week/day are verified against the embedded timestamp.
     ///
     /// ```
-    /// # use kalid::Kalid;
+    /// use kalid::Kalid;
     /// // epoch 0 ms = Thursday, Jan 1, 1970 → month a, week 01, day p
     /// let kalid = Kalid::parse("000000000000a01p").unwrap();
     /// assert_eq!(kalid.epoch_ms(), 0);
@@ -205,13 +220,15 @@ impl Kalid {
     /// For externally-generated UUID v7, the timestamp is still accurate
     /// but week+day are derived from the timestamp (not from `rand_a`).
     ///
+    /// Requires the `uuid` feature.
+    ///
     /// ```
     /// # use kalid::Kalid;
-    /// # use uuid::Uuid;
-    /// let uuid = Uuid::now_v7();
+    /// let uuid = uuid::Uuid::now_v7();
     /// let kalid = Kalid::from_uuid_v7(&uuid);
     /// assert_eq!(kalid.as_string().len(), 16);
     /// ```
+    #[cfg(feature = "uuid")]
     pub fn from_uuid_v7(uuid: &uuid::Uuid) -> Self {
         let bytes = uuid.as_bytes();
         let epoch_ms = u64::from_be_bytes([0, 0, bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]]) as i64;
@@ -235,7 +252,7 @@ impl Kalid {
     /// Format: `{ms_hex:012}{month}{week:02}{day}`.
     ///
     /// ```
-    /// # use kalid::Kalid;
+    /// use kalid::Kalid;
     /// let kalid = Kalid::from_epoch_ms(0);
     /// assert_eq!(kalid.as_string(), "000000000000a01p");
     /// ```
@@ -247,11 +264,23 @@ impl Kalid {
     ///
     /// Note: sub-millisecond precision is not available — the value is
     /// `epoch_ms / 1000`.
+    ///
+    /// ```
+    /// use kalid::Kalid;
+    /// let kalid = Kalid::from_epoch(1_784_060_036);
+    /// assert_eq!(kalid.epoch_secs(), 1_784_060_036);
+    /// ```
     pub fn epoch_secs(&self) -> i64 {
         self.epoch_ms / 1000
     }
 
     /// Return the Unix epoch timestamp in milliseconds.
+    ///
+    /// ```
+    /// use kalid::Kalid;
+    /// let kalid = Kalid::from_epoch_ms(1_784_060_036_000);
+    /// assert_eq!(kalid.epoch_ms(), 1_784_060_036_000);
+    /// ```
     pub fn epoch_ms(&self) -> i64 {
         self.epoch_ms
     }
@@ -269,6 +298,8 @@ impl Kalid {
     /// from the kalid. This means `from_uuid_v7(to_uuid_v7())` always produces
     /// the **exact same kalid string**.
     ///
+    /// Requires the `uuid` feature.
+    ///
     /// ```
     /// # use kalid::Kalid;
     /// let kalid = Kalid::new();
@@ -279,6 +310,7 @@ impl Kalid {
     /// let back = Kalid::from_uuid_v7(&uuid);
     /// assert_eq!(back.as_string(), kalid.as_string());
     /// ```
+    #[cfg(feature = "uuid")]
     pub fn to_uuid_v7(&self) -> uuid::Uuid {
         let mut bytes = [0u8; 10];
         rand::fill(&mut bytes[..]);
@@ -304,6 +336,8 @@ impl Kalid {
 // Helpers
 // ---------------------------------------------------------------------------
 
+use chrono::Datelike;
+
 fn format_kalid(epoch_ms: i64) -> String {
     let secs = epoch_ms / 1000;
     let nsecs = ((epoch_ms % 1000) * 1_000_000) as u32;
@@ -320,7 +354,7 @@ fn format_kalid(epoch_ms: i64) -> String {
 /// Equivalent to `Kalid::new().as_string()`.
 ///
 /// ```
-/// # use kalid::generate_kalid;
+/// use kalid::generate_kalid;
 /// let id = generate_kalid();
 /// assert_eq!(id.len(), 16);
 /// ```
