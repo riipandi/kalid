@@ -47,7 +47,7 @@ publish-dry: ## Dry-run publish (validate packaging)
 
 publish: ## Publish to crates.io
 	@printf '\033[33mPublishing kalid v$(APP_VERSION)...\033[0m\n'
-	@$(CARGO) publish
+	@$(CARGO) publish --allow-dirty
 	@printf '\033[32m✓ Published\033[0m\n'
 
 version: ## Show version
