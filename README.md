@@ -35,20 +35,20 @@ Kalid encodes a Unix millisecond timestamp into a compact 16-character string:
 
 ```toml
 [dependencies]
-kalid = "0.0.2"
+kalid = "0.0.3"
 ```
 
 To also enable **UUID v7 interop**, ensure the `uuid` feature is enabled (it's on by default):
 
 ```toml
 [dependencies]
-kalid = { version = "0.0.2", features = ["uuid"] }
+kalid = { version = "0.0.3", features = ["uuid"] }
 ```
 
 Opt out if you don't need UUID v7:
 
 ```toml
-kalid = { version = "0.0.2", default-features = false }
+kalid = { version = "0.0.3", default-features = false }
 ```
 
 ```rust

@@ -45,7 +45,7 @@
 //! Enable with:
 //! ```toml
 //! [dependencies]
-//! kalid = { version = "0.0.2", features = ["uuid"] }
+//! kalid = { version = "0.0.3", features = ["uuid"] }
 //! ```
 //!
 //! # Example
