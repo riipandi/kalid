@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.0.5] - 2026-07-15
+
+### Added
+
+- 100% test coverage across default, `tokio`, and `smol` feature builds
+- `civil_negative_days_roundtrip` test exercising the pre-1970 (negative day/year) branches of the branchless calendar arithmetic
+
+### Changed
+
+- Moved public-API tests out of the inline `mod tests` in `src/lib.rs` into `tests/unit.rs`; private-function tests remain inline
+- README benchmark section: Kalid as the 1.0× baseline, added async (`tokio`) benchmark subsection
+- Bumped version to 0.0.5
+
 ## [0.0.4] - 2026-07-14
 
 ### Added

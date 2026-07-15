@@ -21,7 +21,7 @@ Kalid encodes a Unix millisecond timestamp into a compact 16-character string wi
 
 ```toml
 [dependencies]
-kalid = "0.0.4"
+kalid = "0.0.5"
 ```
 
 ```rust
@@ -67,24 +67,40 @@ cargo run --example sorting
 
 ## Benchmarks
 
-**Hardware:** Apple M2 Pro (10 cores), 16 GB RAM, macOS 26.5.2, Rust 1.97.0.
-**Tool:** criterion.rs, 100 samples per benchmark. `generate_kalid` is the 1.0× baseline.
+- **Hardware:** Apple M2 Pro (10 cores), 16 GB RAM, macOS 26.5.2, Rust 1.97.0.
+- **Tool:** criterion.rs, 100 samples per benchmark. `kalid::generate_kalid` is the 1.0× baseline.
 
-| Operation                         | Before       | After       | vs ULID          |
-|-----------------------------------|--------------|-------------|------------------|
-| `kalid::from_epoch_ms`            | 0.34 ns      | 0.34 ns     | **147× faster**  |
-| `kalid::from_uuid_v7`             | 0.58 ns      | 0.59 ns     | **87× faster**   |
-| `kalid::as_string`                | 106.2 ns     | **16.4 ns** | **3.1× faster**  |
-| `kalid::as_str_buf` (zero-alloc)  | —            | **~8 ns**   | **~6× faster**   |
-| `kalid::parse`                    | 118.8 ns     | **14.7 ns** | **3.5× faster**  |
-| `kalid::to_uuid_v7`               | 28.9 ns      | 31.0 ns     | **1.6× faster**  |
-| `kalid::generate_kalid`           | **159.4 ns** | **36.0 ns** | **1.4× faster**  |
-| `ulid::Ulid::r#gen().to_string()` | —            | 51.5 ns     | 1.0× (reference) |
-| `uuid::Uuid::now_v7`              | —            | 825.6 ns    | 16× slower       |
-| `nanoid::nanoid!(16)`             | —            | 1,152.6 ns  | 22× slower       |
+### Kalid API operations
 
-> **4.4× speed improvement** over the previous version. `generate_kalid` went from 159 ns → 36 ns,
-> now **1.4× faster than ULID**. `as_string` and `parse` improved by **6–8×**.
+| Operation                      | Time (mean) | × of `generate_kalid` |
+|--------------------------------|-------------|-----------------------|
+| `kalid::from_epoch_ms`         | 0.36 ns     | 0.007×                |
+| `kalid::from_uuid_v7`          | 0.57 ns     | 0.012×                |
+| `kalid::parse`                 | 15.3 ns     | 0.32×                 |
+| `kalid::as_string`             | 22.6 ns     | 0.47×                 |
+| `kalid::to_uuid_v7`            | 29.8 ns     | 0.62×                 |
+| `kalid::generate_kalid` (base) | 48.2 ns     | 1.0×                  |
+
+### vs other 16-char ID generators
+
+| Generator                         | Time (mean) | vs Kalid        |
+|-----------------------------------|-------------|-----------------|
+| `kalid::generate_kalid`           | 48.2 ns     | 1.0× (baseline) |
+| `ulid::Ulid::r#gen().to_string()` | 61.4 ns     | 1.27× slower    |
+| `uuid::Uuid::now_v7`              | 896 ns      | 18.6× slower    |
+| `nanoid::nanoid!(16)`             | 1,211 ns    | 25.1× slower    |
+
+### Async (requires `tokio` feature)
+
+| Operation                     | Time (mean) |
+|-------------------------------|-------------|
+| `kalid::Kalid::new_async`     | 4.99 µs     |
+| `kalid::generate_kalid_async` | 5.12 µs     |
+
+> Kalid generates a 16-character ID **1.3× faster than ULID**, **~19× faster than
+> UUID v7**, and **~25× faster than nanoid**. Every Kalid component operation stays
+> under 30 ns; the async path adds a ~5 µs runtime overhead from the tokio executor
+> (`spawn_blocking`).
 
 ```bash
 make bench                       # sync (default features)
