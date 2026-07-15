@@ -3,6 +3,75 @@
 Calendar-based, K-sortable unique ID generator with UUID v7 interoperability.
 Kalid encodes a Unix millisecond timestamp into a compact 16-character string with optional prefix.
 
+## The Idea
+
+Kalid is a **calendar-readable, K-sortable** identifier. Instead of an opaque
+random blob, it packs the timestamp together with the *human-meaningful*
+calendar fields — month, ISO week, and weekday — directly into the string. You
+can read a kalid and know *when* (and roughly *what day*) it was created without
+decoding anything.
+
+### Format
+
+```
+{ms_hex:012}{m}{w:02}{d}    →    16 characters
+```
+
+| Segment  | Length | Meaning                                   |
+|----------|--------|-------------------------------------------|
+| `ms_hex` | 12     | Unix epoch milliseconds as lowercase hex  |
+| `m`      | 1      | Month: `a` = Jan … `l` = Dec              |
+| `w`      | 2      | ISO 8601 week number, zero-padded (01–53) |
+| `d`      | 1      | Weekday: `m` = Mon … `s` = Sun            |
+
+### Example
+
+A UUID v7 and a Kalid share the **exact same 48-bit millisecond timestamp**, so
+they are two views of one point in time:
+
+```
+UUID v7 : 019f6315-16e6-74b2-b49b-2d3b66ee06ba
+Kalid   : 019f631516e6g29o
+```
+
+Breakdown of `019f631516e6g29o`:
+
+```
+019f631516e6   ← 12-char hex timestamp  (0x019f631516e6 = 2026-07-15T00:02:34.342 UTC)
+g              ← July                   (month index 6, 'a' = January)
+29             ← ISO week 29            (zero-padded)
+o              ← Wednesday              (day index 2, 'm' = Monday)
+```
+
+### Month encoding
+
+| char | month    | char | month     |
+|------|----------|------|-----------|
+| `a`  | January  | `g`  | July      |
+| `b`  | February | `h`  | August    |
+| `c`  | March    | `i`  | September |
+| `d`  | April    | `j`  | October   |
+| `e`  | May      | `k`  | November  |
+| `f`  | June     | `l`  | December  |
+
+### Day encoding
+
+| char | day       | char | day      |
+|------|-----------|------|----------|
+| `m`  | Monday    | `q`  | Friday   |
+| `n`  | Tuesday   | `r`  | Saturday |
+| `o`  | Wednesday | `s`  | Sunday   |
+| `p`  | Thursday  |      |          |
+
+### Why it is K-sortable
+
+The first 12 characters are the timestamp in big-endian lowercase hex, so
+**lexicographic order equals chronological order** — across the same millisecond,
+same day, same month, same year, and even the December→January year boundary.
+The calendar suffix is derived *purely* from the timestamp, so it never breaks the
+sort order. See [UUID v7 Interoperability](#uuid-v7-interoperability) for how the
+timestamp maps to a UUID v7.
+
 ## When to use
 
 - **Human-readable** sortable IDs with optional prefix (`"order_019f..."`, `"user_019f..."`)
@@ -21,7 +90,7 @@ Kalid encodes a Unix millisecond timestamp into a compact 16-character string wi
 
 ```toml
 [dependencies]
-kalid = "0.0.5"
+kalid = "0.1.0"
 ```
 
 ```rust
