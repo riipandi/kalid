@@ -1,5 +1,9 @@
 # Kalid
 
+[![Crates version](https://img.shields.io/crates/v/kalid)](https://crates.io/crates/kalid)
+[![Rust version](https://img.shields.io/badge/rust-v1.90-blue.svg?logo=rust&label=MSRV)](https://www.rust-lang.org)
+[![Crates.io Total Downloads](https://img.shields.io/crates/d/kalid)](https://crates.io/crates/kalid)
+
 Calendar-based, K-sortable unique ID generator with UUID v7 interoperability.
 Kalid encodes a Unix millisecond timestamp into a compact 16-character string with optional prefix.
 
