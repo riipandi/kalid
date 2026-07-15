@@ -52,6 +52,19 @@ Kalid::builder().prefix("dbg").no_separator().build();
 
 Separator defaults to `_` (URL-safe per RFC3986). Valid URL-safe chars: `- . _ ~`.
 
+## Examples
+
+```sh
+cargo run --example basic
+cargo run --example uuid-interop
+cargo run --example async --features tokio
+cargo run --example async --features smol
+cargo run --example error-handling
+cargo run --example from-epoch
+cargo run --example prefix
+cargo run --example sorting
+```
+
 ## Benchmarks
 
 **Hardware:** Apple M2 Pro (10 cores), 16 GB RAM, macOS 26.5.2, Rust 1.97.0.
@@ -92,6 +105,9 @@ make bench -- --features tokio   # sync + async
 
 Kalid and [UUID v7](https://www.rfc-editor.org/rfc/rfc9562) share the same ms
 timestamp. Week+day encoded in `rand_a` (12 bits). Roundtrip deterministic.
+
+Use [UUID Timestamp extraction tool](https://www.authgear.com/tools/uuidv7-generator)
+from Authgear to validate the Unix Epoch timestamp.
 
 ## Limitations
 
